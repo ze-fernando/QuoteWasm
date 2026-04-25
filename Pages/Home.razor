@@ -1,0 +1,108 @@
+﻿@page "/"
+@using Price.Exchange
+@using System.Globalization
+@inject ExchangeHandler handler
+
+<PageTitle>Price</PageTitle>
+
+<div class="container">
+    <h1 class="title">Exchange Rates</h1>
+
+    <div class="exchange">
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Price</th>
+                    <th>Percentage</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @foreach (var exchange in data)
+                {
+                    <tr>
+                        <td>@exchange.Code</td>
+                        <td>@FormatPrice(exchange.Bid)</td>
+                        <td>@FormatPercent(exchange.PctChange)%</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <span class="updated">
+        Updated 5 seconds ago
+    </span>
+</div>
+
+@code {
+    int Seconds = 0;
+
+    List<Quote> data = new();
+
+    private PeriodicTimer? timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+
+        timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+
+        _ = Task.Run(async () =>
+        {
+            while (await timer.WaitForNextTickAsync())
+            {
+                Seconds++;
+
+                if (Seconds >= 5)
+                {
+                    Seconds = 0;
+                    await LoadData();
+                }
+
+                await InvokeAsync(StateHasChanged);
+            }
+        });
+    }
+
+    private async Task LoadData()
+    {
+        var response = await handler.GetData();
+
+        if (response is not null)
+        {
+            data = new();
+
+            if (response.USDBRL is not null)
+                data.Add(response.USDBRL);
+
+            if (response.EURBRL is not null)
+                data.Add(response.EURBRL);
+
+            if (response.BTCBRL is not null)
+                data.Add(response.BTCBRL);
+        }
+    }
+
+    private string FormatPrice(string value)
+    {
+        if (decimal.TryParse(value, CultureInfo.InvariantCulture, out var number))
+            return number.ToString("0.00");
+
+        return value;
+    }
+
+    private string FormatPercent(string value)
+    {
+        if (decimal.TryParse(value, CultureInfo.InvariantCulture, out var number))
+            return number.ToString("0.00");
+
+        return value;
+    }
+
+    public void Dispose()
+    {
+        timer?.Dispose();
+    }
+}
